@@ -1,0 +1,355 @@
+<Window x:Class="GearBoardBridge.Views.SetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GearBoard Bridge — Setup"
+        Width="480" Height="600"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgDarkBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- Title bar -->
+            <RowDefinition Height="Auto"/>  <!-- Step indicator -->
+            <RowDefinition Height="*"/>     <!-- Content -->
+            <RowDefinition Height="Auto"/>  <!-- Navigation -->
+        </Grid.RowDefinitions>
+
+        <!-- ═══ TITLE BAR ═══ -->
+        <Border Grid.Row="0" Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                Padding="16,12">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="🎸" FontSize="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <StackPanel>
+                    <TextBlock Text="GearBoard Bridge" Style="{StaticResource HeadingText}"/>
+                    <TextBlock Text="First-time setup" Style="{StaticResource SecondaryText}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ═══ STEP INDICATOR ═══ -->
+        <Grid Grid.Row="1" Margin="40,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Step 1 circle -->
+            <Grid Grid.Column="0" Width="36" Height="36">
+                <Ellipse Fill="{Binding IsStep0Active, Converter={StaticResource StepActiveBrush}}"/>
+                <TextBlock Text="1" Foreground="White" FontWeight="Bold" FontSize="14"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Connector line 1→2 -->
+            <Rectangle Grid.Column="1" Height="2" VerticalAlignment="Center"
+                       Fill="{Binding IsStep1Active, Converter={StaticResource StepActiveBrush}}"/>
+
+            <!-- Step 2 circle -->
+            <Grid Grid.Column="2" Width="36" Height="36">
+                <Ellipse Fill="{Binding IsStep1Active, Converter={StaticResource StepActiveBrush}}"/>
+                <TextBlock Text="2" Foreground="White" FontWeight="Bold" FontSize="14"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Connector line 2→3 -->
+            <Rectangle Grid.Column="3" Height="2" VerticalAlignment="Center"
+                       Fill="{Binding IsStep2Active, Converter={StaticResource StepActiveBrush}}"/>
+
+            <!-- Step 3 circle -->
+            <Grid Grid.Column="4" Width="36" Height="36">
+                <Ellipse Fill="{Binding IsStep2Active, Converter={StaticResource StepActiveBrush}}"/>
+                <TextBlock Text="3" Foreground="White" FontWeight="Bold" FontSize="14"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+        </Grid>
+
+        <!-- ═══ CONTENT AREA ═══ -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="24,0">
+            <Grid>
+
+                <!-- ─── STEP 1: System Check ─── -->
+                <StackPanel Visibility="{Binding IsStep0Active, Converter={StaticResource BoolToVisibility}}">
+
+                    <TextBlock Text="System Check" Style="{StaticResource HeadingText}" Margin="0,0,0,4"/>
+                    <TextBlock Text="Checking your system for required components."
+                               Style="{StaticResource SecondaryText}" Margin="0,0,0,16" TextWrapping="Wrap"/>
+
+                    <!-- Status message -->
+                    <TextBlock Text="{Binding CheckStatusMessage}" Style="{StaticResource SecondaryText}"
+                               Margin="0,0,0,12" TextWrapping="Wrap"
+                               Foreground="{StaticResource AccentAmberBrush}"
+                               Visibility="{Binding CheckStatusMessage, Converter={StaticResource NullToCollapsed}}"/>
+
+                    <!-- Loading spinner -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
+                                Visibility="{Binding IsRunningCheck, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="⏳" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Checking…" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Results (shown when check complete) -->
+                    <StackPanel Visibility="{Binding CheckComplete, Converter={StaticResource BoolToVisibility}}">
+
+                        <!-- Windows version -->
+                        <Border Style="{StaticResource CardBorder}" Padding="12" Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="✅" FontSize="14"
+                                           Visibility="{Binding SystemCheck.IsWindows10OrLater, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"/>
+                                <TextBlock Grid.Column="0" Text="❌" FontSize="14" Foreground="{StaticResource ErrorBrush}"
+                                           Visibility="{Binding SystemCheck.IsWindows10OrLater, Converter={StaticResource InverseBoolToVisibility}, FallbackValue=Collapsed}"/>
+                                <TextBlock Grid.Column="1" Text="Windows" Style="{StaticResource BodyText}" Margin="8,0,0,0"/>
+                                <TextBlock Grid.Column="2" Text="{Binding SystemCheck.WindowsVersion}" Style="{StaticResource SecondaryText}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Bluetooth / BLE -->
+                        <Border Style="{StaticResource CardBorder}" Padding="12" Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="✅" FontSize="14"
+                                           Visibility="{Binding SystemCheck.HasBleSupport, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"/>
+                                <TextBlock Grid.Column="0" Text="⚠" FontSize="14" Foreground="{StaticResource WarningBrush}"
+                                           Visibility="{Binding SystemCheck.HasBleSupport, Converter={StaticResource InverseBoolToVisibility}, FallbackValue=Collapsed}"/>
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock Text="📡 Bluetooth / BLE" Style="{StaticResource BodyText}"/>
+                                    <TextBlock Text="Optional — used for BLE MIDI transport" Style="{StaticResource SecondaryText}" FontSize="11"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding SystemCheck.BluetoothAdapterName, FallbackValue='Not found'}"
+                                           Style="{StaticResource SecondaryText}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- USB MIDI -->
+                        <Border Style="{StaticResource CardBorder}" Padding="12" Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="✅" FontSize="14"
+                                           Visibility="{Binding SystemCheck.HasUsbMidiDevice, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"/>
+                                <TextBlock Grid.Column="0" Text="—" FontSize="14" Foreground="{StaticResource TextMutedBrush}"
+                                           Visibility="{Binding SystemCheck.HasUsbMidiDevice, Converter={StaticResource InverseBoolToVisibility}, FallbackValue=Collapsed}"/>
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock Text="🔌 USB MIDI" Style="{StaticResource BodyText}"/>
+                                    <TextBlock Text="Optional — lowest latency (~2ms)" Style="{StaticResource SecondaryText}" FontSize="11"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding SystemCheck.UsbMidiDeviceName, FallbackValue='Not connected'}"
+                                           Style="{StaticResource SecondaryText}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- WiFi -->
+                        <Border Style="{StaticResource CardBorder}" Padding="12" Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="✅" FontSize="14"
+                                           Visibility="{Binding SystemCheck.HasWifiConnection, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"/>
+                                <TextBlock Grid.Column="0" Text="⚠" FontSize="14" Foreground="{StaticResource WarningBrush}"
+                                           Visibility="{Binding SystemCheck.HasWifiConnection, Converter={StaticResource InverseBoolToVisibility}, FallbackValue=Collapsed}"/>
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock Text="📶 Network (WiFi/Ethernet)" Style="{StaticResource BodyText}"/>
+                                    <TextBlock Text="Optional — used for WiFi MIDI transport" Style="{StaticResource SecondaryText}" FontSize="11"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding SystemCheck.LocalIpAddress, FallbackValue='Not connected'}"
+                                           Style="{StaticResource SecondaryText}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Virtual MIDI -->
+                        <Border Style="{StaticResource CardBorder}" Padding="12" Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="✅" FontSize="14"
+                                           Visibility="{Binding VirtualMidiReady, Converter={StaticResource BoolToVisibility}}"/>
+                                <TextBlock Grid.Column="0" Text="❌" FontSize="14" Foreground="{StaticResource ErrorBrush}"
+                                           Visibility="{Binding VirtualMidiReady, Converter={StaticResource InverseBoolToVisibility}}"/>
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock Text="🎵 Virtual MIDI Port" Style="{StaticResource BodyText}"/>
+                                    <TextBlock Text="Required — routes MIDI to your DAW" Style="{StaticResource SecondaryText}" FontSize="11"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource SecondaryText}">
+                                            <Setter Property="Text" Value="Not installed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Win11MidiServices}" Value="True">
+                                                    <Setter Property="Text" Value="Win11 MIDI Services"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding DriverInstalled}" Value="True">
+                                                    <Setter Property="Text" Value="loopMIDI"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+
+                    </StackPanel>
+
+                    <!-- Run Check button (shown when not yet complete) -->
+                    <Button Content="Run System Check" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding RunCheckCommand}" HorizontalAlignment="Stretch"
+                            Margin="0,8,0,0"
+                            Visibility="{Binding CheckComplete, Converter={StaticResource InverseBoolToVisibility}}"/>
+
+                </StackPanel>
+
+                <!-- ─── STEP 2: Driver Setup ─── -->
+                <StackPanel Visibility="{Binding IsStep1Active, Converter={StaticResource BoolToVisibility}}">
+
+                    <TextBlock Text="Virtual MIDI Port" Style="{StaticResource HeadingText}" Margin="0,0,0,4"/>
+                    <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap" Margin="0,0,0,16" LineHeight="20">
+                        GearBoard Bridge needs a virtual MIDI port to route MIDI to your DAW (Ableton, etc.).
+                        Install <Run FontWeight="SemiBold">loopMIDI</Run> — a free driver by Tobias Erichsen.
+                    </TextBlock>
+
+                    <!-- Already installed banner -->
+                    <Border CornerRadius="8" Padding="16" Margin="0,0,0,12"
+                            Background="#1A3A1A"
+                            BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1"
+                            Visibility="{Binding VirtualMidiReady, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="✅" FontSize="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <StackPanel>
+                                <TextBlock Text="Virtual MIDI port ready!" Style="{StaticResource BodyText}"/>
+                                <TextBlock>
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource SecondaryText}">
+                                            <Setter Property="Text" Value="loopMIDI driver detected."/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Win11MidiServices}" Value="True">
+                                                    <Setter Property="Text" Value="Windows MIDI Services detected (no extra driver needed)."/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Not installed panel -->
+                    <StackPanel Visibility="{Binding VirtualMidiReady, Converter={StaticResource InverseBoolToVisibility}}">
+                        <Border Style="{StaticResource CardBorder}">
+                            <StackPanel>
+                                <TextBlock Text="Steps to install:" Style="{StaticResource BodyText}" Margin="0,0,0,8"/>
+                                <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap" LineHeight="20">
+                                    1. Click "Download loopMIDI" below&#10;
+                                    2. Run the installer (loopMIDI_1.0.x.exe)&#10;
+                                    3. Click "Check Again" once installed
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Download loopMIDI" Style="{StaticResource PrimaryButton}"
+                                    Command="{Binding OpenDriverDownloadCommand}" Margin="0,0,8,0"/>
+                            <Button Content="Check Again" Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding RecheckDriverCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                </StackPanel>
+
+                <!-- ─── STEP 3: Ready ─── -->
+                <StackPanel Visibility="{Binding IsStep2Active, Converter={StaticResource BoolToVisibility}}">
+
+                    <TextBlock Text="Ready to go! 🎸" Style="{StaticResource HeadingText}" Margin="0,0,0,4"/>
+                    <TextBlock Text="GearBoard Bridge is configured. Here's what's available:"
+                               Style="{StaticResource SecondaryText}" Margin="0,0,0,16" TextWrapping="Wrap"/>
+
+                    <!-- Transport summary pills -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <Border CornerRadius="10" Padding="10,5" Margin="0,0,8,0"
+                                Background="{Binding SystemCheck.HasUsbMidiDevice, Converter={StaticResource AvailabilityBrush}, FallbackValue=#3A3A55}">
+                            <TextBlock Text="🔌 USB MIDI" FontSize="12" Foreground="White" FontWeight="SemiBold"/>
+                        </Border>
+                        <Border CornerRadius="10" Padding="10,5" Margin="0,0,8,0"
+                                Background="{Binding SystemCheck.HasWifiConnection, Converter={StaticResource AvailabilityBrush}, FallbackValue=#3A3A55}">
+                            <TextBlock Text="📶 WiFi MIDI" FontSize="12" Foreground="White" FontWeight="SemiBold"/>
+                        </Border>
+                        <Border CornerRadius="10" Padding="10,5"
+                                Background="{Binding SystemCheck.HasBleSupport, Converter={StaticResource AvailabilityBrush}, FallbackValue=#3A3A55}">
+                            <TextBlock Text="📡 BLE MIDI" FontSize="12" Foreground="White" FontWeight="SemiBold"/>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Ableton quick setup hint -->
+                    <Border Style="{StaticResource CardBorder}" Background="#0D1A0D" BorderBrush="{StaticResource BorderSubtleBrush}">
+                        <StackPanel>
+                            <TextBlock Text="💡 Ableton setup (2 minutes)" Style="{StaticResource BodyText}" Margin="0,0,0,8"/>
+                            <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap" LineHeight="20">
+                                1. Open Ableton → Preferences → MIDI&#10;
+                                2. Find "GearBoard MIDI" in the port list&#10;
+                                3. Enable Track (input) + Sync (output)
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+
+            </Grid>
+        </ScrollViewer>
+
+        <!-- ═══ NAVIGATION ═══ -->
+        <Border Grid.Row="3" Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,0"
+                Padding="24,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Back button (hidden on step 1) -->
+                <Button Grid.Column="0" Content="← Back" Style="{StaticResource SecondaryButton}"
+                        Padding="16,8" Command="{Binding BackCommand}"
+                        Visibility="{Binding IsStep0Active, Converter={StaticResource InverseBoolToVisibility}}"/>
+
+                <!-- Skip (always visible, text-style) -->
+                <Button Grid.Column="1" Content="Skip setup" Style="{StaticResource SecondaryButton}"
+                        BorderThickness="0" HorizontalAlignment="Center" Padding="12,8"
+                        Command="{Binding SkipCommand}" Foreground="{StaticResource TextMutedBrush}"/>
+
+                <!-- Next (step 1 + 2) -->
+                <Button Grid.Column="2" Content="Next →" Style="{StaticResource PrimaryButton}"
+                        Padding="20,8" Command="{Binding NextCommand}"
+                        IsEnabled="{Binding CheckComplete}"
+                        Visibility="{Binding IsStep2Active, Converter={StaticResource InverseBoolToVisibility}}"/>
+
+                <!-- Launch (step 3 only) -->
+                <Button Grid.Column="2" Content="Launch →" Style="{StaticResource PrimaryButton}"
+                        Padding="20,8" Command="{Binding LaunchCommand}"
+                        Visibility="{Binding IsStep2Active, Converter={StaticResource BoolToVisibility}}"/>
+
+            </Grid>
+        </Border>
+
+    </Grid>
+</Window>

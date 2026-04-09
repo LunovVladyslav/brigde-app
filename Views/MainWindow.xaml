@@ -1,0 +1,393 @@
+<Window x:Class="GearBoardBridge.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GearBoard Bridge"
+        Width="440" Height="720"
+        MinWidth="380" MinHeight="500"
+        ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgDarkBrush}">
+
+    <Window.Resources>
+        <Style x:Key="StatusDotStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Height" Value="10"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="DawBullet" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentAmberBrush}"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="DawName" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="DawPath" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══ TITLE BAR ═══ -->
+        <Border Grid.Row="0" Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                Padding="16,10">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="🎸" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="GearBoard Bridge" Style="{StaticResource HeadingText}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Text="v1.0" Style="{StaticResource SecondaryText}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- ═══ MAIN CONTENT ═══ -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16">
+            <StackPanel>
+
+                <!-- ═══ STATUS CARD ═══ -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+
+                        <!-- Header -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="📡" FontSize="14" Foreground="{StaticResource AccentAmberBrush}"
+                                       Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Status" Style="{StaticResource HeadingText}"/>
+                        </StackPanel>
+
+                        <!-- Status row: dot + text -->
+                        <StackPanel Orientation="Horizontal" Margin="0,4">
+                            <Ellipse Style="{StaticResource StatusDotStyle}"
+                                     Fill="{Binding StatusDotColor, Converter={StaticResource HexColorToBrush}}"/>
+                            <TextBlock Text="{Binding StatusText, Mode=OneWay}"
+                                       Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Transport pill + latency (only when connected) -->
+                        <StackPanel Orientation="Horizontal" Margin="18,6,0,0"
+                                    Visibility="{Binding ConnectedDeviceName, Converter={StaticResource NullToCollapsed}}">
+                            <Border Background="{StaticResource BleStatusBgBrush}"
+                                    CornerRadius="12" Padding="10,4" Margin="0,0,8,0">
+                                <TextBlock Text="{Binding TransportBadge, Mode=OneWay}"
+                                           FontSize="11" FontWeight="SemiBold" Foreground="White"/>
+                            </Border>
+                            <TextBlock Style="{StaticResource SecondaryText}" VerticalAlignment="Center">
+                                <Run Text="•  ~"/>
+                                <Run Text="{Binding LatencyMs, StringFormat='{}{0:F0}', Mode=OneWay}"/>
+                                <Run Text="ms latency"/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Virtual port row (only when connected) -->
+                        <StackPanel Orientation="Horizontal" Margin="18,4,0,0"
+                                    Visibility="{Binding ConnectedDeviceName, Converter={StaticResource NullToCollapsed}}">
+                            <TextBlock Style="{StaticResource SecondaryText}">
+                                🎵  Port: GearBoard MIDI ✅
+                            </TextBlock>
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ DEVICES CARD ═══ -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+
+                        <!-- Header -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="🔍" FontSize="14" Foreground="{StaticResource AccentAmberBrush}"
+                                       Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Devices" Style="{StaticResource HeadingText}"/>
+                        </StackPanel>
+
+                        <!-- Scan button -->
+                        <Button Style="{StaticResource PrimaryButton}"
+                                Command="{Binding StartScanCommand}"
+                                HorizontalAlignment="Stretch" Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding IsScanning, Converter={StaticResource ScanButtonText}}"
+                                           Margin="0,0,0,0"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Transport pills: color = active green if connected via that transport, else neutral -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <Border CornerRadius="12" Padding="10,4" Margin="0,0,8,0"
+                                    Background="{Binding UsbPillColor, Converter={StaticResource HexColorToBrush}}">
+                                <TextBlock Text="🔌 USB" FontSize="11" Foreground="White" FontWeight="SemiBold"/>
+                            </Border>
+                            <Border CornerRadius="12" Padding="10,4" Margin="0,0,8,0"
+                                    Background="{Binding WifiPillColor, Converter={StaticResource HexColorToBrush}}">
+                                <TextBlock Text="📶 WiFi" FontSize="11" Foreground="White" FontWeight="SemiBold"/>
+                            </Border>
+                            <Border CornerRadius="12" Padding="10,4"
+                                    Background="{Binding BlePillColor, Converter={StaticResource HexColorToBrush}}">
+                                <TextBlock Text="📡 BLE" FontSize="11" Foreground="White" FontWeight="SemiBold"/>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Device list -->
+                        <ItemsControl ItemsSource="{Binding DiscoveredDevices}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{StaticResource BgSurfaceHoverBrush}"
+                                            CornerRadius="6" Padding="12,10" Margin="0,2"
+                                            MinHeight="48">
+                                        <Grid>
+                                            <!-- Left: name + subtitle -->
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13" FontWeight="Medium"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                <TextBlock Text="{Binding SubtitleText}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           Margin="0,2,0,0"/>
+                                            </StackPanel>
+
+                                            <!-- "● Connected" badge — shown when this device IS connected -->
+                                            <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                    Background="{StaticResource ConnectedBgBrush}"
+                                                    CornerRadius="6" Padding="12,5">
+                                                <Border.Visibility>
+                                                    <MultiBinding Converter="{StaticResource StringEqToVis}">
+                                                        <Binding Path="Name"/>
+                                                        <Binding Path="DataContext.ConnectedDeviceName"
+                                                                 RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                    </MultiBinding>
+                                                </Border.Visibility>
+                                                <TextBlock Text="● Connected"
+                                                           FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource SuccessBrush}"/>
+                                            </Border>
+
+                                            <!-- Connect button — shown when this device is NOT connected -->
+                                            <Button Style="{StaticResource SmallConnectButton}"
+                                                    Content="Connect"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                    Command="{Binding DataContext.ConnectToDeviceCommand,
+                                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}">
+                                                <Button.Visibility>
+                                                    <MultiBinding Converter="{StaticResource StringNeqToVis}">
+                                                        <Binding Path="Name"/>
+                                                        <Binding Path="DataContext.ConnectedDeviceName"
+                                                                 RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                    </MultiBinding>
+                                                </Button.Visibility>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Disconnect button (only when connected) -->
+                        <Button Content="Disconnect" Style="{StaticResource DangerButton}"
+                                Command="{Binding DisconnectCommand}" Margin="0,8,0,0"
+                                Visibility="{Binding ConnectedDeviceName, Converter={StaticResource NullToCollapsed}}"
+                                HorizontalAlignment="Stretch"/>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ MIDI MONITOR ═══ -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+
+                        <!-- Header -->
+                        <Grid Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🎵" FontSize="14" Foreground="{StaticResource AccentAmberBrush}"
+                                           Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="MIDI Monitor" Style="{StaticResource HeadingText}"/>
+                                <TextBlock Style="{StaticResource SecondaryText}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Margin="8,0,0,0" VerticalAlignment="Center">
+                                    <Run Text="("/>
+                                    <Run Text="{Binding MessageCount, Mode=OneWay}"/>
+                                    <Run Text=" msgs)"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <Button Content="Clear" Style="{StaticResource SecondaryButton}"
+                                    Padding="8,2" HorizontalAlignment="Right"
+                                    FontSize="12" BorderThickness="0"
+                                    Foreground="{StaticResource AccentAmberBrush}"
+                                    Command="{Binding ClearMidiLogCommand}"/>
+                        </Grid>
+
+                        <!-- Log area -->
+                        <Border Background="#0A0A16" CornerRadius="6" Padding="10" MaxHeight="210">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding MidiLog}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock FontFamily="Cascadia Mono, Consolas, Courier New"
+                                                       FontSize="12" Margin="0,2">
+                                                <Run Text="{Binding DirectionArrow, Mode=OneWay}"
+                                                     Foreground="{StaticResource TextMutedBrush}"/>
+                                                <Run Text=" "/>
+                                                <Run Text="{Binding TypeLabel, Mode=OneWay}"
+                                                     FontWeight="SemiBold"
+                                                     Foreground="{Binding TypeColorHex, Mode=OneWay,
+                                                                  Converter={StaticResource HexColorToBrush}}"/>
+                                                <Run Text="{Binding DetailText, Mode=OneWay}"
+                                                     Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <Run Text="  "/>
+                                                <Run Text="{Binding TimeString, Mode=OneWay}"
+                                                     Foreground="{StaticResource TextMutedBrush}"/>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                    <ItemsControl.Style>
+                                        <Style TargetType="ItemsControl">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding MessageCount}" Value="0">
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate>
+                                                                <TextBlock Text="No MIDI messages yet..."
+                                                                           FontSize="12"
+                                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                                           Margin="0,2"/>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ItemsControl.Style>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ DAW SETUP ═══ -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+
+                        <!-- Header -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <Ellipse Width="8" Height="8" Fill="{StaticResource AccentAmberBrush}"
+                                     Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="DAW Setup" Style="{StaticResource HeadingText}"/>
+                        </StackPanel>
+
+                        <!-- Intro -->
+                        <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap"
+                                   Margin="0,0,0,8" LineHeight="20">
+                            GearBoard MIDI works with any DAW that supports virtual MIDI ports:
+                        </TextBlock>
+
+                        <!-- 4 steps -->
+                        <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap"
+                                   Margin="0,2" LineHeight="20">1.  Open your DAW MIDI settings</TextBlock>
+                        <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap"
+                                   Margin="0,2" LineHeight="20">2.  Find "GearBoard MIDI" in the input port list</TextBlock>
+                        <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap"
+                                   Margin="0,2" LineHeight="20">3.  Enable Track input → receive CC, PC &amp; Notes</TextBlock>
+                        <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap"
+                                   Margin="0,2,0,12" LineHeight="20">4.  Enable Sync output → send clock to GearBoard</TextBlock>
+
+                        <!-- Divider -->
+                        <Border Background="{StaticResource BorderSubtleBrush}" Height="1" Margin="0,0,0,10"/>
+
+                        <!-- Section label -->
+                        <TextBlock Text="QUICK GUIDE PER DAW" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="0,0,0,12"
+                                   Typography.Capitals="AllSmallCaps"/>
+
+                        <!-- DAW rows -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="•" Style="{StaticResource DawBullet}"/>
+                            <TextBlock Grid.Column="1" Text="Ableton Live" Style="{StaticResource DawName}"/>
+                            <TextBlock Grid.Column="2" Text="Preferences → MIDI → Track / Sync" Style="{StaticResource DawPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="•" Style="{StaticResource DawBullet}"/>
+                            <TextBlock Grid.Column="1" Text="FL Studio" Style="{StaticResource DawName}"/>
+                            <TextBlock Grid.Column="2" Text="Options → MIDI Settings → Input" Style="{StaticResource DawPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="•" Style="{StaticResource DawBullet}"/>
+                            <TextBlock Grid.Column="1" Text="Reaper" Style="{StaticResource DawName}"/>
+                            <TextBlock Grid.Column="2" Text="Options → Preferences → Audio/MIDI" Style="{StaticResource DawPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="•" Style="{StaticResource DawBullet}"/>
+                            <TextBlock Grid.Column="1" Text="Pro Tools" Style="{StaticResource DawName}"/>
+                            <TextBlock Grid.Column="2" Text="Setup → MIDI Studio → Enable ports" Style="{StaticResource DawPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="•" Style="{StaticResource DawBullet}"/>
+                            <TextBlock Grid.Column="1" Text="Studio One" Style="{StaticResource DawName}"/>
+                            <TextBlock Grid.Column="2" Text="Options → External Devices → New device" Style="{StaticResource DawPath}"/>
+                        </Grid>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="•" Style="{StaticResource DawBullet}"/>
+                            <TextBlock Grid.Column="1" Text="Cubase / Nuendo" Style="{StaticResource DawName}"/>
+                            <TextBlock Grid.Column="2" Text="Studio → Studio Setup → MIDI Port Setup" Style="{StaticResource DawPath}"/>
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+
+    <Window.Style>
+        <Style TargetType="Window">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+        </Style>
+    </Window.Style>
+</Window>

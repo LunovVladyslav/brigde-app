@@ -1,0 +1,23 @@
+<Application x:Class="GearBoardBridge.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:GearBoardBridge.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Converters -->
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+            <converters:NullToCollapsedConverter x:Key="NullToCollapsed"/>
+            <converters:ScanButtonTextConverter x:Key="ScanButtonText"/>
+            <converters:AvailabilityBrushConverter x:Key="AvailabilityBrush"/>
+            <converters:StepActiveBrushConverter x:Key="StepActiveBrush"/>
+            <converters:HexColorToBrushConverter x:Key="HexColorToBrush"/>
+            <converters:StringEqualityToVisibilityConverter x:Key="StringEqToVis"/>
+            <converters:StringInequalityToVisibilityConverter x:Key="StringNeqToVis"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
