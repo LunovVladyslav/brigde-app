@@ -14,17 +14,20 @@ namespace GearBoardBridge.ViewModels;
 /// </summary>
 public partial class MainViewModel : ObservableObject
 {
-    private readonly SystemDetector _systemDetector;
-    private readonly BleMidiService _bleMidi;
-    private readonly VirtualMidiPortService _virtualMidiPort;
-    private readonly ILogger<MainViewModel> _logger;
+    private readonly SystemDetector           _systemDetector;
+    private readonly IReadOnlyList<IMidiTransport> _transports;
+    private readonly VirtualMidiPortService   _virtualMidiPort;
+    private readonly ILogger<MainViewModel>   _logger;
+
+    // The transport currently used for the active connection (null when disconnected)
+    private IMidiTransport? _activeTransport;
 
     // ── Connection State ──
     [ObservableProperty] private ConnectionState _connectionState = ConnectionState.Idle;
     [ObservableProperty] private string _statusText = "Not connected";
     [ObservableProperty] private string _statusIcon = "○";
     [ObservableProperty] private string? _connectedDeviceName;
-    [ObservableProperty] private TransportType _activeTransport = TransportType.BLE;
+    [ObservableProperty] private TransportType _activeTransportType = TransportType.BLE;
     [ObservableProperty] private string _transportBadge = "";
     [ObservableProperty] private double _latencyMs;
 
@@ -61,19 +64,42 @@ public partial class MainViewModel : ObservableObject
     public string BlePillColor  => IsActiveTransport(TransportType.BLE)  ? "#2E7D32" : "#2D2D4A";
 
     private bool IsActiveTransport(TransportType t)
-        => ConnectionState == ConnectionState.Connected && ActiveTransport == t;
+        => ConnectionState == ConnectionState.Connected && ActiveTransportType == t;
 
-    public MainViewModel(SystemDetector systemDetector, BleMidiService bleMidi,
+    public MainViewModel(SystemDetector systemDetector,
+                         BleMidiService bleMidi,
+                         UsbMidiService usbMidi,
+                         WifiMidiService wifiMidi,
                          VirtualMidiPortService virtualMidiPort,
                          ILogger<MainViewModel> logger)
     {
         _systemDetector  = systemDetector;
-        _bleMidi         = bleMidi;
         _virtualMidiPort = virtualMidiPort;
         _logger          = logger;
 
-        // ── Subscribe to BLE MIDI events ──
-        _bleMidi.DeviceDiscovered += device =>
+        _transports = [bleMidi, usbMidi, wifiMidi];
+
+        // ── Subscribe to events from all transports ──
+        foreach (var transport in _transports)
+            SubscribeTransport(transport);
+
+        // ── Forward DAW MIDI clock back to the active transport ──
+        _virtualMidiPort.DawMidiReceived += bytes =>
+        {
+            var active = _activeTransport;
+            if (active != null)
+                _ = active.SendMidiAsync(bytes);
+        };
+    }
+
+    /// <summary>
+    /// Wire up the three transport events. Only StateChanged from the active
+    /// transport updates the main UI state; MidiDataReceived and DeviceDiscovered
+    /// are processed from any transport.
+    /// </summary>
+    private void SubscribeTransport(IMidiTransport transport)
+    {
+        transport.DeviceDiscovered += device =>
         {
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
@@ -82,33 +108,36 @@ public partial class MainViewModel : ObservableObject
             });
         };
 
-        _bleMidi.MidiDataReceived += rawBytes =>
+        transport.MidiDataReceived += rawBytes =>
         {
             // Forward to virtual MIDI port so DAW receives the data
             _virtualMidiPort.SendMidi(rawBytes);
 
-            var msg = MidiParser.Parse(rawBytes, MidiDirection.PhoneToDaw, TransportType.BLE);
+            var msg = MidiParser.Parse(rawBytes, MidiDirection.PhoneToDaw, transport.Type);
             if (msg != null) AddMidiMessage(msg);
         };
 
-        _bleMidi.StateChanged += state =>
+        transport.StateChanged += state =>
         {
+            // Only the active transport drives the connection UI
+            if (!ReferenceEquals(transport, _activeTransport)) return;
+
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
                 ConnectionState = state;
                 if (state == ConnectionState.Error)
                 {
-                    StatusText     = "Error: Connection lost";
-                    StatusDotColor = "#EF5350";
+                    StatusText      = "Error: Connection lost";
+                    StatusDotColor  = "#EF5350";
                     ConnectedDeviceName = null;
-                    TransportBadge = "";
-                    LatencyMs      = 0;
+                    TransportBadge  = "";
+                    LatencyMs       = 0;
                 }
             });
         };
     }
 
-    // Notify pill colors when connection state or active transport changes
+    // Notify pill colors when connection state or active transport type changes
     partial void OnConnectionStateChanged(ConnectionState value)
     {
         OnPropertyChanged(nameof(UsbPillColor));
@@ -116,7 +145,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(BlePillColor));
     }
 
-    partial void OnActiveTransportChanged(TransportType value)
+    partial void OnActiveTransportTypeChanged(TransportType value)
     {
         OnPropertyChanged(nameof(UsbPillColor));
         OnPropertyChanged(nameof(WifiPillColor));
@@ -132,15 +161,13 @@ public partial class MainViewModel : ObservableObject
         IsCheckingSystem = true;
         try
         {
-            SystemCheck = await _systemDetector.DetectAsync();
-            BleAvailable = SystemCheck.HasBleSupport;
-            UsbAvailable = SystemCheck.HasUsbMidiDevice;
+            SystemCheck   = await _systemDetector.DetectAsync();
+            BleAvailable  = SystemCheck.HasBleSupport;
+            UsbAvailable  = SystemCheck.HasUsbMidiDevice;
             WifiAvailable = SystemCheck.HasWifiConnection;
 
             if (SystemCheck.AllRequirementsMet)
-            {
                 ShowSetupWizard = false;
-            }
         }
         catch (Exception ex)
         {
@@ -162,7 +189,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Start BLE scan for GearBoard devices.
+    /// Start scanning for GearBoard devices across all available transports.
     /// </summary>
     [RelayCommand]
     private async Task StartScanAsync()
@@ -171,16 +198,25 @@ public partial class MainViewModel : ObservableObject
         DiscoveredDevices.Clear();
         StatusText     = "Scanning for GearBoard...";
         StatusIcon     = "◐";
-        StatusDotColor = "#FFA726"; // amber while scanning
-        ActiveTransport = TransportType.BLE;
+        StatusDotColor = "#FFA726";
 
-        var started = await _bleMidi.StartDiscoveryAsync();
-        if (!started)
+        var startResults = await Task.WhenAll(_transports.Select(async t =>
+        {
+            try   { return await t.StartDiscoveryAsync(); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Transport {Name} scan failed to start", t.TransportName);
+                return false;
+            }
+        }));
+
+        if (!startResults.Any(r => r))
         {
             IsScanning     = false;
-            StatusText     = "Bluetooth scan failed. Check BT is enabled.";
+            StatusText     = "All transport scans failed. Check Bluetooth and network.";
             StatusDotColor = "#EF5350";
             ConnectionState = ConnectionState.Idle;
+            return;
         }
 
         // Auto-stop scan after 15 seconds if still running
@@ -193,32 +229,46 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task StopScanAsync()
     {
-        await _bleMidi.StopDiscoveryAsync();
+        await Task.WhenAll(_transports.Select(async t =>
+        {
+            try   { await t.StopDiscoveryAsync(); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Stop scan failed for {Name}", t.TransportName); }
+        }));
+
         IsScanning     = false;
         StatusDotColor = "#6B6B80";
         if (ConnectionState == ConnectionState.Scanning)
         {
             ConnectionState = ConnectionState.Idle;
-            StatusText      = DiscoveredDevices.Count > 0
+            StatusText = DiscoveredDevices.Count > 0
                 ? $"{DiscoveredDevices.Count} device(s) found"
                 : "No devices found. Make sure GearBoard is running.";
         }
     }
 
     /// <summary>
-    /// Connect to a discovered BLE MIDI device.
+    /// Connect to a discovered device using the transport matching the device's transport type.
     /// </summary>
     [RelayCommand]
     private async Task ConnectToDeviceAsync(DeviceInfo? device)
     {
         if (device == null) return;
 
-        StatusText      = $"Connecting to {device.Name}...";
-        StatusIcon      = "◐";
-        StatusDotColor  = "#FFA726";
-        ActiveTransport = device.Transport;
+        StatusText         = $"Connecting to {device.Name}...";
+        StatusIcon         = "◐";
+        StatusDotColor     = "#FFA726";
+        ActiveTransportType = device.Transport;
 
-        var ok = await _bleMidi.ConnectAsync(device);
+        _activeTransport = _transports.FirstOrDefault(t => t.Type == device.Transport);
+        if (_activeTransport == null)
+        {
+            _logger.LogWarning("No transport registered for type {Type}", device.Transport);
+            StatusText     = $"No handler for transport {device.Transport}";
+            StatusDotColor = "#EF5350";
+            return;
+        }
+
+        var ok = await _activeTransport.ConnectAsync(device);
 
         if (ok)
         {
@@ -227,28 +277,30 @@ public partial class MainViewModel : ObservableObject
             StatusIcon     = "●";
             StatusDotColor = "#4CAF50";
             TransportBadge = device.TransportIcon;
-            LatencyMs      = _bleMidi.EstimatedLatencyMs;
+            LatencyMs      = _activeTransport.EstimatedLatencyMs;
         }
         else
         {
             StatusText     = $"Failed to connect to {device.Name}";
             StatusDotColor = "#EF5350";
+            _activeTransport = null;
         }
     }
 
     /// <summary>
-    /// Disconnect from the current BLE device.
+    /// Disconnect from the currently active transport.
     /// </summary>
     [RelayCommand]
     private async Task DisconnectAsync()
     {
-        await _bleMidi.DisconnectAsync();
+        await (_activeTransport?.DisconnectAsync() ?? Task.CompletedTask);
+        _activeTransport    = null;
         ConnectedDeviceName = null;
-        StatusText     = "Not connected";
-        StatusIcon     = "○";
-        StatusDotColor = "#6B6B80";
-        TransportBadge = "";
-        LatencyMs      = 0;
+        StatusText          = "Not connected";
+        StatusIcon          = "○";
+        StatusDotColor      = "#6B6B80";
+        TransportBadge      = "";
+        LatencyMs           = 0;
     }
 
     /// <summary>

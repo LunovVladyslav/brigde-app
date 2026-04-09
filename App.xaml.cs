@@ -29,6 +29,8 @@ public partial class App : Application
         services.AddSingleton<SystemDetector>();
         services.AddSingleton<DriverInstaller>();
         services.AddSingleton<BleMidiService>();
+        services.AddSingleton<UsbMidiService>();
+        services.AddSingleton<WifiMidiService>();
         services.AddSingleton<VirtualMidiPortService>();
 
         // ViewModels
