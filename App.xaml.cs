@@ -25,13 +25,16 @@ public partial class App : Application
             builder.AddDebug();
         });
 
-        // Services
+        // Services — individual transports must be registered before TransportManager
         services.AddSingleton<SystemDetector>();
         services.AddSingleton<DriverInstaller>();
         services.AddSingleton<BleMidiService>();
         services.AddSingleton<UsbMidiService>();
         services.AddSingleton<WifiMidiService>();
         services.AddSingleton<VirtualMidiPortService>();
+        services.AddSingleton<TransportManager>();
+        services.AddSingleton<MidiBridge>();
+        services.AddSingleton<TrayIconManager>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();
@@ -55,11 +58,18 @@ public partial class App : Application
             var midiPort = _serviceProvider.GetRequiredService<VirtualMidiPortService>();
             midiPort.Open("GearBoard MIDI");
 
+            // Resolve MidiBridge to activate MIDI routing (singleton, wires itself on construction)
+            _ = _serviceProvider.GetRequiredService<MidiBridge>();
+
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
-            // Setup is done — skip the inline wizard panel in the main window
-            var mainVm = (MainViewModel)mainWindow.DataContext;
+            var mainVm     = (MainViewModel)mainWindow.DataContext;
             mainVm.ShowSetupWizard = false;
             mainWindow.Show();
+
+            // Attach tray icon after the window is visible
+            var tray = _serviceProvider.GetRequiredService<TrayIconManager>();
+            tray.Attach(mainWindow);
+            tray.DisconnectRequested += async () => await mainVm.DisconnectCommand.ExecuteAsync(null);
         };
 
         setupWindow.Show();
