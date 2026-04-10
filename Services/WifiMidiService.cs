@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using GearBoardBridge.Models;
 using Microsoft.Extensions.Logging;
+using TransportType = GearBoardBridge.Models.TransportType;
 
 namespace GearBoardBridge.Services;
 

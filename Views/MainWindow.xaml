@@ -39,10 +39,11 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- ═══ TITLE BAR ═══ -->
-        <Border Grid.Row="0" Background="{StaticResource BgSurfaceBrush}"
+        <Border Grid.Row="0"  Background="{StaticResource BgSurfaceBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1"
                 Padding="16,10">
             <Grid>
@@ -57,7 +58,7 @@
         </Border>
 
         <!-- ═══ MAIN CONTENT ═══ -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16,16,16,0">
             <StackPanel>
 
                 <!-- ═══ STATUS CARD ═══ -->
@@ -103,6 +104,77 @@
                         </StackPanel>
 
                     </StackPanel>
+                </Border>
+
+                <!-- ═══ ERROR BANNERS ═══ -->
+
+                <!-- Bluetooth disabled banner -->
+                <Border Background="#3B1A1A" BorderBrush="#EF5350" BorderThickness="1"
+                        CornerRadius="8" Padding="12,10" Margin="0,0,0,8"
+                        Visibility="{Binding ShowBluetoothError, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="Bluetooth is disabled" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#EF5350"/>
+                            <TextBlock Text="Enable Bluetooth to connect via BLE."
+                                       Style="{StaticResource SecondaryText}" Margin="0,2,0,6"/>
+                            <Button Content="Open Bluetooth Settings" Style="{StaticResource SecondaryButton}"
+                                    HorizontalAlignment="Left" Padding="10,4" FontSize="12"
+                                    Command="{Binding OpenBluetoothSettingsCommand}"/>
+                        </StackPanel>
+                        <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{StaticResource TextMutedBrush}" FontSize="14" Padding="4"
+                                Command="{Binding DismissBluetoothErrorCommand}"/>
+                    </Grid>
+                </Border>
+
+                <!-- USB not in MIDI mode banner -->
+                <Border Background="#1A1A2E" BorderBrush="#FFA726" BorderThickness="1"
+                        CornerRadius="8" Padding="12,10" Margin="0,0,0,8"
+                        Visibility="{Binding ShowUsbModeError, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="USB device not in MIDI mode" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#FFA726"/>
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource SecondaryText}" Margin="0,2,0,0" LineHeight="18">
+                                On your Android phone:&#x0a;1. Connect USB cable&#x0a;2. Pull down notification shade&#x0a;3. Tap "USB for charging" → select "MIDI"
+                            </TextBlock>
+                        </StackPanel>
+                        <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{StaticResource TextMutedBrush}" FontSize="14" Padding="4"
+                                Command="{Binding DismissUsbErrorCommand}"/>
+                    </Grid>
+                </Border>
+
+                <!-- WiFi network mismatch banner -->
+                <Border Background="#1A1A2E" BorderBrush="#42A5F5" BorderThickness="1"
+                        CornerRadius="8" Padding="12,10" Margin="0,0,0,8"
+                        Visibility="{Binding ShowWifiError, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="WiFi connection failed" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#42A5F5"/>
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource SecondaryText}" Margin="0,2,0,6" LineHeight="18">
+                                Make sure both devices are on the same Wi-Fi network and GearBoard WiFi MIDI is enabled.
+                            </TextBlock>
+                            <Button Content="Open WiFi Settings" Style="{StaticResource SecondaryButton}"
+                                    HorizontalAlignment="Left" Padding="10,4" FontSize="12"
+                                    Command="{Binding OpenWifiSettingsCommand}"/>
+                        </StackPanel>
+                        <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{StaticResource TextMutedBrush}" FontSize="14" Padding="4"
+                                Command="{Binding DismissWifiErrorCommand}"/>
+                    </Grid>
+                </Border>
+
+                <!-- Generic error message -->
+                <Border Background="#2A1A1A" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
+                        Visibility="{Binding ErrorMessage, Converter={StaticResource NullToCollapsed}}">
+                    <TextBlock Text="{Binding ErrorMessage}" Style="{StaticResource SecondaryText}"
+                               Foreground="#EF5350" TextWrapping="Wrap"/>
                 </Border>
 
                 <!-- ═══ DEVICES CARD ═══ -->
@@ -383,6 +455,44 @@
 
             </StackPanel>
         </ScrollViewer>
+
+        <!-- ═══ FOOTER ═══ -->
+        <Border Grid.Row="2" Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,0"
+                Padding="16,8">
+            <Grid>
+                <!-- BPM display (shown when clock detected) -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            Visibility="{Binding DetectedBpm, Converter={StaticResource NonZeroToVisible}}">
+                    <TextBlock Text="♩ " Foreground="{StaticResource AccentAmberBrush}" FontSize="13"/>
+                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="12">
+                        <Run Text="{Binding DetectedBpm, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                        <Run Text=" BPM"/>
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Settings button -->
+                <Button Content="⚙ Settings" HorizontalAlignment="Right"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="{StaticResource TextSecondaryBrush}"
+                        FontSize="12" Padding="8,4"
+                        Click="OnSettingsClick">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource AccentAmberBrush}"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
+        </Border>
+
     </Grid>
 
     <Window.Style>

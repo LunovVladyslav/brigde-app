@@ -18,6 +18,7 @@
             <converters:HexColorToBrushConverter x:Key="HexColorToBrush"/>
             <converters:StringEqualityToVisibilityConverter x:Key="StringEqToVis"/>
             <converters:StringInequalityToVisibilityConverter x:Key="StringNeqToVis"/>
+            <converters:NonZeroToVisibilityConverter x:Key="NonZeroToVisible"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

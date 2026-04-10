@@ -14,15 +14,19 @@ namespace GearBoardBridge.ViewModels;
 /// </summary>
 public partial class MainViewModel : ObservableObject
 {
-    private readonly SystemDetector           _systemDetector;
+    private readonly SystemDetector               _systemDetector;
     private readonly IReadOnlyList<IMidiTransport> _transports;
-    private readonly VirtualMidiPortService   _virtualMidiPort;
-    private readonly ILogger<MainViewModel>   _logger;
+    private readonly VirtualMidiPortService        _virtualMidiPort;
+    private readonly SettingsService               _settings;
+    private readonly ILogger<MainViewModel>        _logger;
 
-    // The transport currently used for the active connection (null when disconnected)
     private IMidiTransport? _activeTransport;
 
-    // ── Connection State ──
+    // BPM detection — track MIDI clock tick timestamps
+    private readonly Queue<DateTime> _clockTicks = new();
+
+    // ── Connection State ──────────────────────────────────────────────────────
+
     [ObservableProperty] private ConnectionState _connectionState = ConnectionState.Idle;
     [ObservableProperty] private string _statusText = "Not connected";
     [ObservableProperty] private string _statusIcon = "○";
@@ -31,59 +35,75 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _transportBadge = "";
     [ObservableProperty] private double _latencyMs;
 
-    // ── Scanning ──
+    // ── Scanning ─────────────────────────────────────────────────────────────
+
     [ObservableProperty] private bool _isScanning;
     [ObservableProperty] private ObservableCollection<DeviceInfo> _discoveredDevices = [];
 
-    // ── System Check ──
+    // ── System Check ─────────────────────────────────────────────────────────
+
     [ObservableProperty] private SystemCheckResult? _systemCheck;
     [ObservableProperty] private bool _isCheckingSystem;
     [ObservableProperty] private bool _showSetupWizard = true;
 
-    // ── MIDI Monitor ──
+    // ── MIDI Monitor ─────────────────────────────────────────────────────────
+
     [ObservableProperty] private ObservableCollection<MidiMessage> _midiLog = [];
     [ObservableProperty] private int _messageCount;
     [ObservableProperty] private float _detectedBpm;
     [ObservableProperty] private bool _isMonitorExpanded = true;
 
-    // ── Transport Availability ──
+    // ── Transport Availability ────────────────────────────────────────────────
+
     [ObservableProperty] private bool _usbAvailable;
     [ObservableProperty] private bool _wifiAvailable;
     [ObservableProperty] private bool _bleAvailable;
     [ObservableProperty] private string? _suggestionText;
 
-    // ── Visual State ──
-    /// <summary>Hex color for the status dot — gray/amber/green/red per connection state.</summary>
+    // ── Error Handling ────────────────────────────────────────────────────────
+
+    /// <summary>True when Bluetooth adapter is off — shows the "Enable Bluetooth" banner.</summary>
+    [ObservableProperty] private bool _showBluetoothError;
+
+    /// <summary>True when no USB MIDI mode detected — shows USB setup instructions.</summary>
+    [ObservableProperty] private bool _showUsbModeError;
+
+    /// <summary>True when WiFi transport fails — shows network troubleshooting.</summary>
+    [ObservableProperty] private bool _showWifiError;
+
+    /// <summary>Generic connection error message shown under the status card.</summary>
+    [ObservableProperty] private string? _errorMessage;
+
+    // ── Visual State ─────────────────────────────────────────────────────────
+
     [ObservableProperty] private string _statusDotColor = "#6B6B80";
 
-    /// <summary>Hex color for the USB transport pill — green when active, neutral otherwise.</summary>
     public string UsbPillColor  => IsActiveTransport(TransportType.USB)  ? "#2E7D32" : "#2D2D4A";
-    /// <summary>Hex color for the WiFi transport pill — green when active, neutral otherwise.</summary>
     public string WifiPillColor => IsActiveTransport(TransportType.WiFi) ? "#2E7D32" : "#2D2D4A";
-    /// <summary>Hex color for the BLE transport pill — green when active, neutral otherwise.</summary>
     public string BlePillColor  => IsActiveTransport(TransportType.BLE)  ? "#2E7D32" : "#2D2D4A";
 
     private bool IsActiveTransport(TransportType t)
         => ConnectionState == ConnectionState.Connected && ActiveTransportType == t;
 
-    public MainViewModel(SystemDetector systemDetector,
-                         BleMidiService bleMidi,
-                         UsbMidiService usbMidi,
-                         WifiMidiService wifiMidi,
-                         VirtualMidiPortService virtualMidiPort,
-                         ILogger<MainViewModel> logger)
+    public MainViewModel(
+        SystemDetector         systemDetector,
+        BleMidiService         bleMidi,
+        UsbMidiService         usbMidi,
+        WifiMidiService        wifiMidi,
+        VirtualMidiPortService virtualMidiPort,
+        SettingsService        settings,
+        ILogger<MainViewModel> logger)
     {
         _systemDetector  = systemDetector;
         _virtualMidiPort = virtualMidiPort;
+        _settings        = settings;
         _logger          = logger;
 
         _transports = [bleMidi, usbMidi, wifiMidi];
 
-        // ── Subscribe to events from all transports ──
         foreach (var transport in _transports)
             SubscribeTransport(transport);
 
-        // ── Forward DAW MIDI clock back to the active transport ──
         _virtualMidiPort.DawMidiReceived += bytes =>
         {
             var active = _activeTransport;
@@ -92,11 +112,8 @@ public partial class MainViewModel : ObservableObject
         };
     }
 
-    /// <summary>
-    /// Wire up the three transport events. Only StateChanged from the active
-    /// transport updates the main UI state; MidiDataReceived and DeviceDiscovered
-    /// are processed from any transport.
-    /// </summary>
+    // ── Transport subscriptions ───────────────────────────────────────────────
+
     private void SubscribeTransport(IMidiTransport transport)
     {
         transport.DeviceDiscovered += device =>
@@ -105,39 +122,61 @@ public partial class MainViewModel : ObservableObject
             {
                 if (!DiscoveredDevices.Any(d => d.Id == device.Id))
                     DiscoveredDevices.Add(device);
+
+                // Auto-connect: if this is the saved device, connect immediately
+                TryAutoConnect(device);
             });
         };
 
         transport.MidiDataReceived += rawBytes =>
         {
-            // Forward to virtual MIDI port so DAW receives the data
             _virtualMidiPort.SendMidi(rawBytes);
-
             var msg = MidiParser.Parse(rawBytes, MidiDirection.PhoneToDaw, transport.Type);
             if (msg != null) AddMidiMessage(msg);
         };
 
         transport.StateChanged += state =>
         {
-            // Only the active transport drives the connection UI
             if (!ReferenceEquals(transport, _activeTransport)) return;
 
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
                 ConnectionState = state;
-                if (state == ConnectionState.Error)
+                switch (state)
                 {
-                    StatusText      = "Error: Connection lost";
-                    StatusDotColor  = "#EF5350";
-                    ConnectedDeviceName = null;
-                    TransportBadge  = "";
-                    LatencyMs       = 0;
+                    case ConnectionState.Error:
+                        StatusText          = "Connection lost";
+                        StatusDotColor      = "#EF5350";
+                        ConnectedDeviceName = null;
+                        TransportBadge      = "";
+                        LatencyMs           = 0;
+                        ErrorMessage        = GetTransportErrorHint(transport.Type);
+                        break;
+
+                    case ConnectionState.Reconnecting:
+                        StatusText     = $"Reconnecting to {ConnectedDeviceName}...";
+                        StatusDotColor = "#FFA726";
+                        ErrorMessage   = null;
+                        break;
+
+                    case ConnectionState.Connected:
+                        ErrorMessage = null;
+                        break;
                 }
             });
         };
     }
 
-    // Notify pill colors when connection state or active transport type changes
+    private static string GetTransportErrorHint(TransportType type) => type switch
+    {
+        TransportType.BLE  => "Make sure GearBoard is running and Bluetooth is enabled.",
+        TransportType.USB  => "Check the USB cable and ensure the phone is in MIDI mode.",
+        TransportType.WiFi => "Ensure both devices are on the same Wi-Fi network.",
+        _                  => "Check the connection and try again."
+    };
+
+    // ── Pill color reactivity ─────────────────────────────────────────────────
+
     partial void OnConnectionStateChanged(ConnectionState value)
     {
         OnPropertyChanged(nameof(UsbPillColor));
@@ -152,9 +191,42 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(BlePillColor));
     }
 
+    // ── Auto-connect ──────────────────────────────────────────────────────────
+
     /// <summary>
-    /// Run system detection on startup.
+    /// Called from App.xaml.cs after setup wizard completes.
+    /// If auto-connect is enabled and we have a saved device, starts scanning.
     /// </summary>
+    public async Task TryAutoConnectOnStartupAsync()
+    {
+        if (!_settings.Current.AutoConnectOnStartup) return;
+        if (_settings.Current.LastDeviceName is null)  return;
+
+        _logger.LogInformation("Auto-connect: scanning for {Device}", _settings.Current.LastDeviceName);
+        StatusText = $"Looking for {_settings.Current.LastDeviceName}...";
+        await StartScanAsync();
+    }
+
+    private void TryAutoConnect(DeviceInfo device)
+    {
+        if (!_settings.Current.AutoConnectOnStartup) return;
+        if (ConnectionState == ConnectionState.Connected) return;
+        if (_settings.Current.LastDeviceName is null) return;
+
+        // Match by name (and transport if available)
+        bool nameMatch = device.Name == _settings.Current.LastDeviceName;
+        bool transportMatch = _settings.Current.LastTransportType is null
+                           || device.Transport == _settings.Current.LastTransportType;
+
+        if (nameMatch && transportMatch)
+        {
+            _logger.LogInformation("Auto-connect: found saved device {Name}, connecting...", device.Name);
+            _ = ConnectToDeviceAsync(device);
+        }
+    }
+
+    // ── Commands ──────────────────────────────────────────────────────────────
+
     [RelayCommand]
     private async Task RunSystemCheckAsync()
     {
@@ -165,6 +237,11 @@ public partial class MainViewModel : ObservableObject
             BleAvailable  = SystemCheck.HasBleSupport;
             UsbAvailable  = SystemCheck.HasUsbMidiDevice;
             WifiAvailable = SystemCheck.HasWifiConnection;
+
+            // Show error banners for missing capabilities
+            ShowBluetoothError = SystemCheck.HasBluetoothAdapter && !SystemCheck.IsBluetoothEnabled;
+            ShowUsbModeError   = false; // cleared until USB connection attempt fails
+            ShowWifiError      = false;
 
             if (SystemCheck.AllRequirementsMet)
                 ShowSetupWizard = false;
@@ -179,18 +256,9 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Skip setup wizard (user already has everything configured).
-    /// </summary>
     [RelayCommand]
-    private void SkipSetup()
-    {
-        ShowSetupWizard = false;
-    }
+    private void SkipSetup() => ShowSetupWizard = false;
 
-    /// <summary>
-    /// Start scanning for GearBoard devices across all available transports.
-    /// </summary>
     [RelayCommand]
     private async Task StartScanAsync()
     {
@@ -212,14 +280,13 @@ public partial class MainViewModel : ObservableObject
 
         if (!startResults.Any(r => r))
         {
-            IsScanning     = false;
-            StatusText     = "All transport scans failed. Check Bluetooth and network.";
-            StatusDotColor = "#EF5350";
+            IsScanning      = false;
+            StatusText      = "All transport scans failed. Check Bluetooth and network.";
+            StatusDotColor  = "#EF5350";
             ConnectionState = ConnectionState.Idle;
             return;
         }
 
-        // Auto-stop scan after 15 seconds if still running
         _ = Task.Delay(15_000).ContinueWith(async _ =>
         {
             if (IsScanning) await StopScanAsync();
@@ -246,23 +313,20 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Connect to a discovered device using the transport matching the device's transport type.
-    /// </summary>
     [RelayCommand]
     private async Task ConnectToDeviceAsync(DeviceInfo? device)
     {
         if (device == null) return;
 
-        StatusText         = $"Connecting to {device.Name}...";
-        StatusIcon         = "◐";
-        StatusDotColor     = "#FFA726";
+        StatusText          = $"Connecting to {device.Name}...";
+        StatusIcon          = "◐";
+        StatusDotColor      = "#FFA726";
         ActiveTransportType = device.Transport;
+        ErrorMessage        = null;
 
         _activeTransport = _transports.FirstOrDefault(t => t.Type == device.Transport);
         if (_activeTransport == null)
         {
-            _logger.LogWarning("No transport registered for type {Type}", device.Transport);
             StatusText     = $"No handler for transport {device.Transport}";
             StatusDotColor = "#EF5350";
             return;
@@ -273,23 +337,34 @@ public partial class MainViewModel : ObservableObject
         if (ok)
         {
             ConnectedDeviceName = device.Name;
-            StatusText     = $"Connected — {device.Name}";
-            StatusIcon     = "●";
-            StatusDotColor = "#4CAF50";
-            TransportBadge = device.TransportIcon;
-            LatencyMs      = _activeTransport.EstimatedLatencyMs;
+            StatusText          = $"Connected — {device.Name}";
+            StatusIcon          = "●";
+            StatusDotColor      = "#4CAF50";
+            TransportBadge      = device.TransportIcon;
+            LatencyMs           = _activeTransport.EstimatedLatencyMs;
+            ConnectionState     = ConnectionState.Connected;
+            ErrorMessage        = null;
+
+            // Persist for auto-connect next launch
+            _settings.SaveLastDevice(device.Name, device.Id, device.Transport);
         }
         else
         {
             StatusText     = $"Failed to connect to {device.Name}";
             StatusDotColor = "#EF5350";
+            ErrorMessage   = GetTransportErrorHint(device.Transport);
+            ShowTransportErrorBanner(device.Transport);
             _activeTransport = null;
         }
     }
 
-    /// <summary>
-    /// Disconnect from the currently active transport.
-    /// </summary>
+    private void ShowTransportErrorBanner(TransportType type)
+    {
+        ShowBluetoothError = type == TransportType.BLE;
+        ShowUsbModeError   = type == TransportType.USB;
+        ShowWifiError      = type == TransportType.WiFi;
+    }
+
     [RelayCommand]
     private async Task DisconnectAsync()
     {
@@ -301,11 +376,53 @@ public partial class MainViewModel : ObservableObject
         StatusDotColor      = "#6B6B80";
         TransportBadge      = "";
         LatencyMs           = 0;
+        ErrorMessage        = null;
+        ShowBluetoothError  = false;
+        ShowUsbModeError    = false;
+        ShowWifiError       = false;
     }
 
-    /// <summary>
-    /// Add a MIDI message to the monitor log.
-    /// </summary>
+    // ── Error banner dismiss / actions ────────────────────────────────────────
+
+    [RelayCommand]
+    private void DismissBluetoothError() => ShowBluetoothError = false;
+
+    [RelayCommand]
+    private void DismissUsbError() => ShowUsbModeError = false;
+
+    [RelayCommand]
+    private void DismissWifiError() => ShowWifiError = false;
+
+    [RelayCommand]
+    private void OpenBluetoothSettings()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName        = "ms-settings:bluetooth",
+                UseShellExecute = true
+            });
+        }
+        catch { }
+    }
+
+    [RelayCommand]
+    private void OpenWifiSettings()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName        = "ms-settings:network-wifi",
+                UseShellExecute = true
+            });
+        }
+        catch { }
+    }
+
+    // ── MIDI Monitor ─────────────────────────────────────────────────────────
+
     public void AddMidiMessage(MidiMessage message)
     {
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
@@ -316,10 +433,28 @@ public partial class MainViewModel : ObservableObject
             MessageCount++;
 
             if (message.Type == MidiMessageType.Clock)
-            {
-                // BPM detection would go here
-            }
+                UpdateBpm();
         });
+    }
+
+    private void UpdateBpm()
+    {
+        var now = DateTime.UtcNow;
+        _clockTicks.Enqueue(now);
+
+        // Keep only the last 24 ticks (one bar at 4/4)
+        while (_clockTicks.Count > 24)
+            _clockTicks.Dequeue();
+
+        if (_clockTicks.Count < 4) return;
+
+        var ticks     = _clockTicks.ToArray();
+        var totalSpan = (ticks[^1] - ticks[0]).TotalSeconds;
+        if (totalSpan <= 0) return;
+
+        // MIDI clock = 24 ticks per quarter note
+        var ticksPerSecond = (ticks.Length - 1) / totalSpan;
+        DetectedBpm = (float)(ticksPerSecond / 24.0 * 60.0);
     }
 
     [RelayCommand]
@@ -327,25 +462,10 @@ public partial class MainViewModel : ObservableObject
     {
         MidiLog.Clear();
         MessageCount = 0;
+        DetectedBpm  = 0;
+        _clockTicks.Clear();
     }
 
     [RelayCommand]
-    private void ToggleMonitor()
-    {
-        IsMonitorExpanded = !IsMonitorExpanded;
-    }
-
-    [RelayCommand]
-    private void OpenBluetoothSettings()
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "ms-settings:bluetooth",
-                UseShellExecute = true
-            });
-        }
-        catch { }
-    }
+    private void ToggleMonitor() => IsMonitorExpanded = !IsMonitorExpanded;
 }
