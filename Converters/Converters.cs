@@ -94,6 +94,23 @@ public class StringEqualityToVisibilityConverter : IMultiValueConverter
         => throw new NotImplementedException();
 }
 
+/// <summary>float/double != 0 → Visible, else Collapsed (used for BPM display)</summary>
+public class NonZeroToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value switch
+        {
+            float  f => f != 0f  ? Visibility.Visible : Visibility.Collapsed,
+            double d => d != 0.0 ? Visibility.Visible : Visibility.Collapsed,
+            int    i => i != 0   ? Visibility.Visible : Visibility.Collapsed,
+            _        => Visibility.Collapsed
+        };
+    }
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
 /// <summary>
 /// Multi-value: values[0] != values[1] (string inequality) → Visible, else Collapsed.
 /// Shows "Connect" button when device name does NOT match ConnectedDeviceName.
