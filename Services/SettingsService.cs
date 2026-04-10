@@ -115,7 +115,7 @@ public sealed class SettingsService
 
             if (enable)
             {
-                var exePath = Environment.ProcessPath ?? System.Reflection.Assembly.GetEntryAssembly()?.Location ?? "";
+                var exePath = Environment.ProcessPath ?? AppContext.BaseDirectory + "GearBoardBridge.exe";
                 if (!string.IsNullOrEmpty(exePath))
                 {
                     key.SetValue(RunValueName, $"\"{exePath}\" --minimized");

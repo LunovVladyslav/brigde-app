@@ -11,6 +11,28 @@
 
     <!-- Windows Runtime support for Bluetooth + MIDI APIs -->
     <WindowsSdkPackageVersion>10.0.19041.56</WindowsSdkPackageVersion>
+
+    <!-- Version info -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company>GearBoard</Company>
+    <Product>GearBoard Bridge</Product>
+    <Description>Bridges MIDI between GearBoard (Android) and DAWs on Windows via USB, WiFi, or BLE.</Description>
+    <Copyright>Copyright © 2026 GearBoard</Copyright>
+  </PropertyGroup>
+
+  <!-- Self-contained single-file publish profile (win-x64) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Trim unused code to reduce binary size -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <!-- Produce a .pdb alongside the exe for crash reports -->
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
